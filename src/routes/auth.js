@@ -185,6 +185,8 @@ router.post('/login', async (req, res, next) => {
         priceTier: user.priceTier,
         clientName: user.clientName,
         isVerified: user.isVerified,
+        isActive: user.isActive,
+        photo: user.photo || null,
       },
       token,
     });

@@ -5,7 +5,7 @@ import express from 'express';
 import multer from 'multer';
 import sharp from 'sharp';
 import bcrypt from 'bcryptjs';
-import { authenticate, authorize } from '../middleware/auth.js';
+import { authenticate, authorize, tryAuthenticate } from '../middleware/auth.js';
 import { User } from '../models/User.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,7 +56,7 @@ const upload = multer({
 // ─── Routes ────────────────────────────────────────────────────────
 
 // GET /api/commercials — list active commercials (role=commercial, isActive=true), sorted by displayOrder
-router.get('/', authenticate, async (req, res, next) => {
+router.get('/', tryAuthenticate, async (req, res, next) => {
   try {
     const users = await User.find({ role: 'commercial', isActive: true })
       .sort({ displayOrder: 1 })
