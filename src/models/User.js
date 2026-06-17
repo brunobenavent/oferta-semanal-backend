@@ -9,6 +9,11 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['superadmin', 'admin', 'employee', 'client', 'commercial'], default: 'client' },
   priceTier: { type: Number, enum: [2, 3], default: 2 },  // only for clients
   clientName: { type: String, default: null },  // empresa for clients
+  cif: { type: String, default: '' },
+  taxAddress: { type: String, default: '' },
+  authorizedName: { type: String, default: '' },
+  authorizedPosition: { type: String, default: '' },
+  authorizedEmail: { type: String, default: '' },
   // Commercial-specific fields (optional for other roles)
   phone: { type: String, default: '' },
   position: { type: String, default: '' },

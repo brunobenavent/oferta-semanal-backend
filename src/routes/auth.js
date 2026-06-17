@@ -334,7 +334,7 @@ router.get('/users', authenticate, authorize('superadmin', 'admin'), async (req,
 // POST /users
 router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req, res, next) => {
   try {
-    const { email, nombre, role, priceTier, clientName, phone, position, languages } = req.body;
+    const { email, nombre, role, priceTier, clientName, phone, position, languages, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail } = req.body;
 
     if (!email || !nombre) {
       return res.status(400).json({ message: 'Email y nombre son requeridos' });
@@ -362,6 +362,11 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
       phone: phone || '',
       position: position || '',
       languages: languages || [],
+      cif: cif || '',
+      taxAddress: taxAddress || '',
+      authorizedName: authorizedName || '',
+      authorizedPosition: authorizedPosition || '',
+      authorizedEmail: authorizedEmail || '',
       isVerified: role === 'commercial', // commercials start verified
       createdBy: req.user.userId,
     });
@@ -393,7 +398,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
 router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { role, priceTier, clientName, isActive, nombre, phone, position, languages, photo } = req.body;
+    const { role, priceTier, clientName, isActive, nombre, phone, position, languages, photo, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail } = req.body;
 
     // Load the current user first
     const currentUser = await User.findById(id);
@@ -421,6 +426,11 @@ router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (
     if (position !== undefined) updateData.position = position;
     if (languages !== undefined) updateData.languages = languages;
     if (photo !== undefined) updateData.photo = photo;
+    if (cif !== undefined) updateData.cif = cif;
+    if (taxAddress !== undefined) updateData.taxAddress = taxAddress;
+    if (authorizedName !== undefined) updateData.authorizedName = authorizedName;
+    if (authorizedPosition !== undefined) updateData.authorizedPosition = authorizedPosition;
+    if (authorizedEmail !== undefined) updateData.authorizedEmail = authorizedEmail;
 
     const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 
