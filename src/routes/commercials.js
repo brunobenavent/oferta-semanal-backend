@@ -58,7 +58,7 @@ const upload = multer({
 // GET /api/commercials — list active commercials (role=commercial, isActive=true), sorted by displayOrder
 router.get('/', tryAuthenticate, async (req, res, next) => {
   try {
-    const users = await User.find({ role: 'commercial', isActive: true })
+    const users = await User.find({ roles: 'commercial', isActive: true })
       .sort({ displayOrder: 1 })
       .lean();
     res.json({ commercials: users.map(toCommercialJSON) });
@@ -85,7 +85,7 @@ router.post('/', authenticate, authorize('superadmin', 'admin'), async (req, res
       email: email.toLowerCase(),
       nombre: name,
       password: Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2),
-      role: 'commercial',
+      roles: ['commercial'],
       phone,
       position: position || '',
       photo: photo || '',

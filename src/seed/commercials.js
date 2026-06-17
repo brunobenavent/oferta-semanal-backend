@@ -112,7 +112,7 @@ export async function seedCommercials() {
     if (existing) {
       const updates = {
         nombre: data.name,
-        role: 'commercial',
+        roles: ['commercial'],
         phone: data.phone,
         position: data.position,
         languages: data.languages,
@@ -132,7 +132,7 @@ export async function seedCommercials() {
         email: data.email,
         nombre: data.name,
         password: COMMERCIAL_PASSWORD,
-        role: 'commercial',
+        roles: ['commercial'],
         phone: data.phone,
         position: data.position,
         photo: photoUrl,

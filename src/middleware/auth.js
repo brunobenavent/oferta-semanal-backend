@@ -14,7 +14,7 @@ export function authenticate(req, res, next) {
     req.user = {
       userId: decoded.userId,
       email: decoded.email,
-      role: decoded.role,
+      roles: decoded.roles || (decoded.role ? [decoded.role] : []),
       priceTier: decoded.priceTier,
     };
 
@@ -27,9 +27,10 @@ export function authenticate(req, res, next) {
   }
 }
 
-export function authorize(...roles) {
+export function authorize(...allowedRoles) {
   return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
+    const userRoles = req.user?.roles || [];
+    if (!req.user || !userRoles.some(r => allowedRoles.includes(r))) {
       return res.status(403).json({ message: 'No tienes permisos para acceder a este recurso' });
     }
     next();
@@ -49,7 +50,7 @@ export function tryAuthenticate(req, res, next) {
     req.user = {
       userId: decoded.userId,
       email: decoded.email,
-      role: decoded.role,
+      roles: decoded.roles || (decoded.role ? [decoded.role] : []),
       priceTier: decoded.priceTier,
     };
   } catch {

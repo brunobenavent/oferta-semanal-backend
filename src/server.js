@@ -90,6 +90,19 @@ async function runImageWatcher() {
 
 connectDB().then(async () => {
   await seedIfEmpty();
+
+  // Migrate: convert single role to roles array
+  const { User } = await import('./models/User.js');
+  const migrateResult = await User.updateMany(
+    { roles: { $exists: false } },
+    [{ $set: { roles: { $ifNull: ['$roles', ['$role']] } } }]
+  );
+  if (migrateResult.modifiedCount > 0) {
+    console.log(`Migrated ${migrateResult.modifiedCount} users: role → roles[]`);
+  }
+  // Drop old role field
+  await User.updateMany({ role: { $exists: true } }, [{ $unset: ['role'] }]);
+
   startSyncJob();
 
   setTimeout(runImageWatcher, 10000);

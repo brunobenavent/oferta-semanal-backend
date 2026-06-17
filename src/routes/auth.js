@@ -53,7 +53,7 @@ router.post('/register', async (req, res, next) => {
       nombre,
       email: email.toLowerCase(),
       password,
-      role: 'employee',
+      roles: ['employee'],
       isVerified: false,
     });
 
@@ -169,7 +169,8 @@ router.post('/login', async (req, res, next) => {
       {
         userId: user._id,
         email: user.email,
-        role: user.role,
+        roles: user.roles,
+        role: user.roles?.[0] || null, // backward compat
         priceTier: user.priceTier,
       },
       config.jwtSecret,
@@ -181,7 +182,7 @@ router.post('/login', async (req, res, next) => {
         id: user._id,
         email: user.email,
         nombre: user.nombre,
-        role: user.role,
+        roles: user.roles,
         priceTier: user.priceTier,
         clientName: user.clientName,
         isVerified: user.isVerified,
@@ -296,7 +297,7 @@ router.get('/me', authenticate, async (req, res, next) => {
         id: user._id,
         email: user.email,
         nombre: user.nombre,
-        role: user.role,
+        roles: user.roles,
         priceTier: user.priceTier,
         clientName: user.clientName,
         isVerified: user.isVerified,
@@ -334,13 +335,16 @@ router.get('/users', authenticate, authorize('superadmin', 'admin'), async (req,
 // POST /users
 router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req, res, next) => {
   try {
-    const { email, nombre, role, priceTier, clientName, phone, position, languages, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail } = req.body;
+    const { email, nombre, role: bodyRole, roles, priceTier, clientName, phone, position, languages, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail } = req.body;
 
     if (!email || !nombre) {
       return res.status(400).json({ message: 'Email y nombre son requeridos' });
     }
 
-    if (role === 'superadmin') {
+    // roles: accept array from frontend, or derive from single role for backward compat
+    const finalRoles = roles || (bodyRole ? [bodyRole] : ['client']);
+
+    if (finalRoles.includes('superadmin')) {
       return res.status(403).json({ message: 'No puedes crear otro superadmin' });
     }
 
@@ -356,7 +360,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
       email: email.toLowerCase(),
       nombre,
       password: tempPassword,
-      role: role || 'client',
+      roles: finalRoles,
       priceTier: priceTier || 2,
       clientName: clientName || null,
       phone: phone || '',
@@ -367,7 +371,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
       authorizedName: authorizedName || '',
       authorizedPosition: authorizedPosition || '',
       authorizedEmail: authorizedEmail || '',
-      isVerified: role === 'commercial', // commercials start verified
+      isVerified: finalRoles.includes('commercial'), // commercials start verified
       createdBy: req.user.userId,
     });
 
@@ -382,7 +386,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
         id: user._id,
         email: user.email,
         nombre: user.nombre,
-        role: user.role,
+        roles: user.roles,
         priceTier: user.priceTier,
         clientName: user.clientName,
         isVerified: user.isVerified,
@@ -398,7 +402,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
 router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { role, priceTier, clientName, isActive, nombre, phone, position, languages, photo, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail } = req.body;
+    const { role: bodyRole, roles, priceTier, clientName, isActive, nombre, phone, position, languages, photo, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail } = req.body;
 
     // Load the current user first
     const currentUser = await User.findById(id);
@@ -407,17 +411,18 @@ router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (
     }
 
     // Don't allow editing the superadmin
-    if (currentUser.role === 'superadmin') {
+    if (currentUser.roles.includes('superadmin')) {
       return res.status(403).json({ message: 'No puedes modificar al superadmin' });
     }
 
     // Don't allow changing anyone to superadmin
-    if (role === 'superadmin') {
+    const finalRoles = roles || (bodyRole ? [bodyRole] : undefined);
+    if (finalRoles && finalRoles.includes('superadmin')) {
       return res.status(403).json({ message: 'No puedes asignar el rol de superadmin' });
     }
 
     const updateData = {};
-    if (role !== undefined) updateData.role = role;
+    if (finalRoles !== undefined) updateData.roles = finalRoles;
     if (priceTier !== undefined) updateData.priceTier = priceTier;
     if (clientName !== undefined) updateData.clientName = clientName;
     if (isActive !== undefined) updateData.isActive = isActive;
@@ -439,7 +444,7 @@ router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (
         id: user._id,
         email: user.email,
         nombre: user.nombre,
-        role: user.role,
+        roles: user.roles,
         priceTier: user.priceTier,
         clientName: user.clientName,
         isActive: user.isActive,
@@ -521,7 +526,7 @@ router.delete('/users/:id', authenticate, authorize('superadmin', 'admin'), asyn
     if (!targetUser) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
-    if (targetUser.role === 'superadmin') {
+    if (targetUser.roles.includes('superadmin')) {
       return res.status(403).json({ message: 'No puedes eliminar al superadmin' });
     }
 

@@ -16,8 +16,8 @@ export async function seedIfEmpty() {
     const trimmed = email.trim();
     const existing = await User.findOne({ email: trimmed });
     if (existing) {
-      if (existing.role !== 'superadmin') {
-        existing.role = 'superadmin';
+      if (!existing.roles?.includes('superadmin')) {
+        existing.roles = ['superadmin'];
         existing.isVerified = true;
         await existing.save();
         console.log(`[Seed] User ${trimmed} promoted to superadmin`);
@@ -27,7 +27,7 @@ export async function seedIfEmpty() {
         email: trimmed,
         password: process.env.SUPERADMIN_PASSWORD || 'admin123',
         nombre: 'Superadmin',
-        role: 'superadmin',
+        roles: ['superadmin'],
         isVerified: true,
       });
       console.log(`[Seed] Superadmin created: ${trimmed}`);

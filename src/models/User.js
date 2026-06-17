@@ -6,7 +6,8 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
   password: { type: String, required: true, select: false },
   nombre: { type: String, required: true },
-  role: { type: String, enum: ['superadmin', 'admin', 'employee', 'client', 'commercial'], default: 'client' },
+  roles: { type: [String], enum: ['superadmin', 'admin', 'employee', 'client', 'commercial'], default: ['client'] },
+  role: { type: String }, // deprecated — kept for migration, use roles instead
   priceTier: { type: Number, enum: [2, 3], default: 2 },  // only for clients
   clientName: { type: String, default: null },  // empresa for clients
   cif: { type: String, default: '' },

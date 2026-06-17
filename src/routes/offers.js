@@ -88,7 +88,7 @@ router.get('/', tryAuthenticate, async function(req, res, next) {
         // Unauthenticated — only show PVP
         delete result.precio2;
         delete result.precio3;
-      } else if (user.role === 'client') {
+      } else if (user.roles?.includes('client')) {
         if (user.priceTier === 2) {
           delete result.precio3; // tier 2 sees precio1 + precio2
         } else if (user.priceTier === 3) {
@@ -175,7 +175,7 @@ router.get('/export', tryAuthenticate, async function(req, res, next) {
       if (!user) {
         delete result.precio2;
         delete result.precio3;
-      } else if (user.role === 'client') {
+      } else if (user.roles?.includes('client')) {
         if (user.priceTier === 2) {
           delete result.precio3;
         } else if (user.priceTier === 3) {
