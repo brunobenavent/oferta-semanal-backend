@@ -147,11 +147,15 @@ router.get('/filters', async function(req, res, next) {
 
 router.get('/export', tryAuthenticate, async function(req, res, next) {
   try {
-    const { centro, familia, maceta, altura, search } = req.query;
+    const semana = getISOWeek();
+    const semanaAnio = getWeekYear();
+    const { centro, familia, maceta, altura, search, codigos } = req.query;
 
     const query = { ofertaActiva: true };
 
-    if (search) {
+    if (codigos) {
+      query.codigoArticulo = { $in: codigos.split(',').map(c => c.trim()) };
+    } else if (search) {
       query.$or = [
         { codigoArticulo: { $regex: '^' + search, $options: 'i' } },
         { descripcionArticulo: { $regex: search, $options: 'i' } }
@@ -166,6 +170,10 @@ router.get('/export', tryAuthenticate, async function(req, res, next) {
     if (altura) query.altura = altura;
 
     const offers = await Offer.find(query).sort({ codigoArticulo: 1 }).lean();
+
+    if (req.query.format === 'json') {
+      return res.json({ offers, semana, semanaAnio });
+    }
 
     // Price filtering based on user role and tier
     const filteredOffers = offers.map(offer => {
