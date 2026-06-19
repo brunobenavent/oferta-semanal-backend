@@ -3,6 +3,7 @@ import { PreOrder } from '../models/PreOrder.js';
 import { User } from '../models/User.js';
 import { authenticate, authorize, tryAuthenticate } from '../middleware/auth.js';
 import { getISOWeek, getWeekYear } from '../utils/week.js';
+import * as emailService from '../services/email.js';
 
 const router = express.Router();
 
@@ -10,10 +11,12 @@ const router = express.Router();
 
 /** Allowed estado transitions — from → [to, ...] */
 const TRANSITIONS = {
-  borrador: ['enviado'],
-  enviado:  ['visto'],
-  visto:    ['servido'],
-  servido:  [],
+  borrador:   ['pendiente'],
+  pendiente:  ['revisado', 'rechazado', 'borrador'],
+  revisado:   ['confirmado', 'rechazado', 'pendiente'],
+  confirmado: ['enviado', 'rechazado'],
+  enviado:    [],
+  rechazado:  ['borrador'],
 };
 
 /**
@@ -26,7 +29,8 @@ const TRANSITIONS = {
  */
 async function loadPreorder(req, res, next) {
   try {
-    const preorder = await PreOrder.findById(req.params.id);
+    const preorder = await PreOrder.findById(req.params.id)
+      .populate('comerciales', 'nombre email role');
     if (!preorder) {
       return res.status(404).json({ message: 'Prepedido no encontrado' });
     }
@@ -242,7 +246,7 @@ router.patch('/:id/estado', authenticate, loadPreorder, async (req, res, next) =
     const userId = req.user.userId;
     const currentEstado = req.preorder.estado;
     const isOwner = req.preorder.cliente.toString() === userId;
-    const isAssignedCommercial = req.preorder.comerciales.some(c => c.toString() === userId);
+    const isAssignedCommercial = req.preorder.comerciales.some(c => (c._id || c).toString() === userId);
     const isAdmin = roles.includes('superadmin') || roles.includes('admin');
 
     // Transition matrix
@@ -258,25 +262,83 @@ router.patch('/:id/estado', authenticate, loadPreorder, async (req, res, next) =
     }
 
     // Role-based transition guards
+    if (nuevoEstado === 'pendiente') {
+      if (currentEstado === 'borrador') {
+        if (!isOwner && !isAdmin) {
+          return res.status(403).json({ message: 'Solo el cliente puede enviar el prepedido' });
+        }
+        if (req.preorder.items.length === 0) {
+          return res.status(400).json({ message: 'No se puede enviar un prepedido vacío' });
+        }
+      }
+    }
+
+    if (nuevoEstado === 'revisado') {
+      if (!isAssignedCommercial && !isAdmin) {
+        return res.status(403).json({ message: 'Solo el comercial asignado puede revisar el prepedido' });
+      }
+    }
+
+    if (nuevoEstado === 'rechazado') {
+      if (currentEstado === 'pendiente') {
+        if (!isAssignedCommercial && !isAdmin) {
+          return res.status(403).json({ message: 'Solo el comercial asignado puede rechazar el prepedido' });
+        }
+      } else if (currentEstado === 'revisado' || currentEstado === 'confirmado') {
+        if (!isAdmin) {
+          return res.status(403).json({ message: 'Solo un administrador puede rechazar el prepedido' });
+        }
+      }
+    }
+
+    if (nuevoEstado === 'confirmado') {
+      if (!isAdmin) {
+        return res.status(403).json({ message: 'Solo un administrador puede confirmar el prepedido' });
+      }
+    }
+
     if (nuevoEstado === 'enviado') {
-      if (!isOwner && !isAdmin) {
-        return res.status(403).json({ message: 'Solo el cliente puede enviar el prepedido' });
-      }
-      if (req.preorder.items.length === 0) {
-        return res.status(400).json({ message: 'No se puede enviar un prepedido vacío' });
+      if (!isAdmin && !isAssignedCommercial) {
+        return res.status(403).json({ message: 'Solo el comercial asignado o un administrador puede marcar como enviado' });
       }
     }
 
-    if (nuevoEstado === 'visto') {
-      if (!isAssignedCommercial && !isAdmin) {
-        return res.status(403).json({ message: 'Solo el comercial asignado puede marcar como visto' });
+    if (nuevoEstado === 'borrador') {
+      if (currentEstado === 'pendiente') {
+        if (!isOwner && !isAdmin) {
+          return res.status(403).json({ message: 'Solo el cliente puede retornar el prepedido a borrador' });
+        }
+      } else if (currentEstado === 'rechazado') {
+        if (!isOwner && !isAdmin) {
+          return res.status(403).json({ message: 'Solo el cliente puede reabrir el prepedido rechazado' });
+        }
       }
     }
 
-    if (nuevoEstado === 'servido') {
-      if (!isAssignedCommercial && !isAdmin) {
-        return res.status(403).json({ message: 'Solo el comercial asignado puede marcar como servido' });
+    if (nuevoEstado === 'pendiente' && currentEstado === 'revisado') {
+      if (!isAdmin) {
+        return res.status(403).json({ message: 'Solo un administrador puede devolver el prepedido al comercial' });
       }
+    }
+
+    // Push to historial
+    const byRole = roles.includes('admin') || roles.includes('superadmin') ? 'admin'
+      : roles.includes('commercial') ? 'commercial'
+      : 'client';
+
+    req.preorder.historial.push({
+      estadoAnterior: currentEstado,
+      estado: nuevoEstado,
+      by: req.user.userId,
+      byRole,
+      observaciones: req.body.observaciones || '',
+      at: new Date(),
+    });
+
+    // First time borrador → pendiente: set sentAt/sentBy
+    if (currentEstado === 'borrador' && nuevoEstado === 'pendiente' && !req.preorder.sentAt) {
+      req.preorder.sentAt = new Date();
+      req.preorder.sentBy = req.user.userId;
     }
 
     req.preorder.estado = nuevoEstado;
@@ -284,8 +346,17 @@ router.patch('/:id/estado', authenticate, loadPreorder, async (req, res, next) =
 
     const populated = await PreOrder.findById(req.preorder._id)
       .populate('cliente', 'nombre email clientName')
-      .populate('comerciales', 'nombre email')
+      .populate('comerciales', 'nombre email role')
       .lean();
+
+    // Email notification on borrador → pendiente
+    if (currentEstado === 'borrador' && nuevoEstado === 'pendiente') {
+      try {
+        await emailService.sendPreorderNotification(populated);
+      } catch (emailErr) {
+        console.error('Error enviando notificación de prepedido:', emailErr);
+      }
+    }
 
     res.json(populated);
   } catch (error) {

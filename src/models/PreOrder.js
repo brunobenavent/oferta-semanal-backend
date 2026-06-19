@@ -30,11 +30,23 @@ const PreOrderSchema = new mongoose.Schema({
   }],
   estado: { 
     type: String, 
-    enum: ['borrador', 'enviado', 'visto', 'servido'], 
+    enum: ['borrador', 'pendiente', 'revisado', 'confirmado', 'enviado', 'rechazado'], 
     default: 'borrador' 
   },
   items: [PreOrderItemSchema],
   notas: { type: String, default: '' },
+  sentAt: { type: Date },
+  sentBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  historial: [
+    {
+      estadoAnterior: { type: String, required: true },
+      estado:         { type: String, required: true },
+      by:             { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      byRole:         { type: String, enum: ['client', 'commercial', 'admin'], required: true },
+      observaciones:  { type: String, default: '' },
+      at:             { type: Date, default: Date.now }
+    }
+  ],
   semana: { type: Number },
   anio: { type: Number },
 }, { timestamps: true });
