@@ -75,7 +75,10 @@ app.use((req, res) => {
 
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
-  res.status(500).json({ message: 'Internal server error' });
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ message: 'La imagen supera el tamaño máximo de 5MB' });
+  }
+  res.status(500).json({ message: err.message || 'Internal server error' });
 });
 
 const PORT = config.port;

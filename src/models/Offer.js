@@ -35,6 +35,10 @@ const offerSchema = new mongoose.Schema({
   undsTabla: Number,
   undsCaja: Number,
   imagenUrl: String,
+  imagenSubidaManual: {
+    type: Boolean,
+    default: false
+  },
   imagenActualizado: Date,
   ofertaNuevoEspacio: Boolean,
   ofertaEuroPlanta: Boolean,

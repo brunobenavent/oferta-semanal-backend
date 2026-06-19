@@ -1,7 +1,15 @@
 import express from 'express';
 import { Offer } from '../models/Offer.js';
 import { getISOWeek, getWeekYear } from '../utils/week.js';
-import { tryAuthenticate } from '../middleware/auth.js';
+import multer from 'multer';
+import { uploadImage } from '../services/cloudinary.js';
+import * as ftpService from '../services/ftp.js';
+import { tryAuthenticate, authorize } from '../middleware/auth.js';
+
+const upload = multer({ 
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+});
+
 
 const OFFER_CENTER_MAP = {
   'Nuevo Espacio': 'ofertaNuevoEspacio',
@@ -228,6 +236,68 @@ router.get('/export', tryAuthenticate, async function(req, res, next) {
     await workbook.xlsx.write(res);
     res.end();
 
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:codigo/imagen', tryAuthenticate, authorize('superadmin', 'admin', 'employee'), upload.single('imagen'), async (req, res, next) => {
+  try {
+    const { codigo } = req.params;
+    const file = req.file;
+
+    if (!file) return res.status(400).json({ message: 'No se recibió imagen' });
+
+    // 1. Subir a Cloudinary
+    const result = await uploadImage(file.buffer, codigo);
+
+    // 2. Update Offer
+    const offer = await Offer.findOneAndUpdate(
+      { codigoArticulo: codigo },
+      { 
+        $set: { 
+          imagenUrl: result.secure_url, 
+          imagenSubidaManual: true, 
+          imagenActualizado: new Date() 
+        } 
+      },
+      { new: true }
+    );
+
+    if (!offer) return res.status(404).json({ message: 'Oferta no encontrada' });
+
+    // 3. Subir a FTP (best effort)
+    try {
+      await ftpService.connectFtp();
+      const subdir = ftpService.getSubdir(codigo);
+      const remotePath = `${process.env.FTP_PATH}${subdir}/${codigo}-0.jpg`;
+      await ftpService.uploadToFtp(file.buffer, remotePath);
+    } catch (ftpError) {
+      console.error('Error subiendo a FTP (best effort):', ftpError);
+    }
+
+    res.json({ imagenUrl: result.secure_url });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:codigo/imagen', tryAuthenticate, authorize('superadmin', 'admin', 'employee'), async (req, res, next) => {
+  try {
+    const { codigo } = req.params;
+
+    const offer = await Offer.findOneAndUpdate(
+      { codigoArticulo: codigo },
+      { 
+        $set: { imagenSubidaManual: false },
+        $unset: { imagenUrl: '', imagenActualizado: '' }
+      },
+      { new: true }
+    );
+
+    if (!offer) return res.status(404).json({ message: 'Oferta no encontrada' });
+
+    res.json({ message: 'Imagen restaurada al ciclo automático' });
   } catch (error) {
     next(error);
   }

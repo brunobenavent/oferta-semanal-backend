@@ -1,5 +1,4 @@
-import ftp from 'basic-ftp';
-import { Writable } from 'stream';
+import { connectFtp, downloadFromFtp, getSubdir, changeDir, lastMod } from './ftp.js'; // Nuevo servicio
 import config from '../config/index.js';
 import { uploadImage } from './cloudinary.js';
 import { Offer } from '../models/Offer.js';
@@ -7,24 +6,6 @@ import { SyncLog } from '../models/SyncLog.js';
 
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 horas
 const CLOUDINARY_MAX_BYTES = 10 * 1024 * 1024; // 10MB (límite plan gratis)
-
-function getSubdir(codigo) {
-  const num = parseInt(codigo, 10);
-  if (num < 130000) return '0_130m';
-  if (num < 170000) return '130m_170m';
-  return '170m_300m';
-}
-
-function downloadToBuffer(client, filename) {
-  const chunks = [];
-  const writable = new Writable({
-    write(chunk, enc, cb) {
-      chunks.push(chunk);
-      cb();
-    }
-  });
-  return client.downloadTo(writable, filename).then(() => Buffer.concat(chunks));
-}
 
 function isTransientError(err) {
   const msg = err.message || '';
@@ -39,6 +20,7 @@ export async function processImageBatch(batchSize = 50) {
   // y no atascarnos siempre con los mismos códigos bajos que no tienen foto en FTP
   const newOffers = await Offer.aggregate([
     { $match: {
+      imagenSubidaManual: { $ne: true },
       $or: [
         { imagenUrl: { $exists: false } },
         { imagenUrl: null },
@@ -54,6 +36,7 @@ export async function processImageBatch(batchSize = 50) {
 
   const staleOffers = remainingSlots > 0 ? await Offer.aggregate([
     { $match: {
+      imagenSubidaManual: { $ne: true },
       imagenUrl: { $exists: true, $ne: null, $ne: '' },
       $or: [
         { imagenActualizado: { $exists: false } },
@@ -69,6 +52,7 @@ export async function processImageBatch(batchSize = 50) {
   if (!offers.length) return { processed: 0, pending: 0, checked: 0, updated: 0 };
 
   const pending = await Offer.countDocuments({
+    imagenSubidaManual: { $ne: true },
     $or: [
       { imagenUrl: { $exists: false } },
       { imagenUrl: null },
@@ -84,40 +68,8 @@ export async function processImageBatch(batchSize = 50) {
   let updated = 0;
   let skipped = 0;
 
-  /**
-   * Attempt FTP connection with retries
-   */
-  async function connectWithRetry() {
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const client = new ftp.Client();
-        client.ftp.verbose = false;
-        client.timeout = 30000;
-
-        await client.access({
-          host: config.ftp.host,
-          port: config.ftp.port,
-          user: config.ftp.user,
-          password: config.ftp.password,
-          secure: false
-        });
-
-        return client;
-      } catch (err) {
-        console.log(`[ImageWatcher] Intento FTP ${attempt}/${MAX_RETRIES} falló: ${err.message}`);
-        if (attempt < MAX_RETRIES) {
-          await new Promise(r => setTimeout(r, RETRY_DELAY));
-        } else {
-          throw err;
-        }
-      }
-    }
-  }
-
-  let client;
-
   try {
-    client = await connectWithRetry();
+    await connectFtp();
 
     const basePath = config.ftp.path;
 
@@ -125,20 +77,16 @@ export async function processImageBatch(batchSize = 50) {
       const codigo = offer.codigoArticulo;
       const filename = `${codigo}-0.jpg`;
       const subdir = getSubdir(codigo);
+      const remotePath = `${basePath}/${subdir}/${filename}`;
 
       for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-          // Reconnect if needed
-          if (client.closed) {
-            client = await connectWithRetry();
-          }
-
-          await client.cd(`${basePath}/${subdir}`);
+          await changeDir(`${basePath}/${subdir}`);
 
           // Obtener fecha del archivo en FTP
           let ftpDate;
           try {
-            ftpDate = await client.lastMod(filename);
+            ftpDate = await lastMod(filename);
           } catch {
             // El archivo no existe en FTP — lo saltamos
             break; // break retry loop, continue to next offer
@@ -158,7 +106,7 @@ export async function processImageBatch(batchSize = 50) {
           }
 
           // Descargar el archivo
-          const buffer = await downloadToBuffer(client, filename);
+          const buffer = await downloadFromFtp(remotePath);
 
           // Cloudinary gratis: límite 10MB — saltar si es muy grande
           if (buffer.length > CLOUDINARY_MAX_BYTES) {
@@ -198,7 +146,7 @@ export async function processImageBatch(batchSize = 50) {
 
           if (attempt < MAX_RETRIES) {
             console.log(`[ImageWatcher] Reintento ${attempt}/${MAX_RETRIES} para ${codigo}: ${err.message}`);
-            client = await connectWithRetry();
+            await connectFtp();
           } else {
             console.error(`[ImageWatcher] Error con ${codigo} (${subdir}/${filename}) tras ${MAX_RETRIES} intentos: ${err.message}`);
           }
@@ -216,8 +164,6 @@ export async function processImageBatch(batchSize = 50) {
   } catch (error) {
     console.error(`[ImageWatcher] Error de conexión FTP tras ${MAX_RETRIES} intentos: ${error.message}`);
     return { processed: 0, pending, checked: 0, updated: 0, skipped: 0, error: error.message };
-  } finally {
-    if (client) client.close();
   }
 }
 
