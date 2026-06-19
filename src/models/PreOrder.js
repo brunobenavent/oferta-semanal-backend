@@ -11,6 +11,8 @@ const PreOrderItemSchema = new mongoose.Schema({
   undsTabla:   { type: Number, default: 0 },  // UTA — unidades por tabla
   undsCaja:    { type: Number, default: 0 },  // UCA — unidades por caja
   unidades:    { type: Number, default: 0, min: 0 },
+  karrys:      { type: Number, default: 0, min: 0 },  // karrys completos (puede ser > unidades/UCC por rollover)
+  tablas:      { type: Number, default: 0, min: 0 },  // tablas completas (idem)
   precio1:     { type: Number, default: 0 },  // PVP
   precio2:     { type: Number, default: 0 },  // T2
   precio3:     { type: Number, default: 0 },  // T3
