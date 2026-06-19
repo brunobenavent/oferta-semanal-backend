@@ -18,6 +18,7 @@ import { processImageBatch, watchFtpImages } from './services/imageWatcher.js';
 import { Offer } from './models/Offer.js';
 import authRoutes from './routes/auth.js';
 import commercialRoutes from './routes/commercials.js';
+import preorderRoutes from './routes/preorders.js';
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/uploads', express.static(resolve(__dirname, '..', 'uploads')));
 app.use('/api/auth', authRoutes);
 app.use('/api/offers', offerRoutes);
 app.use('/api/commercials', commercialRoutes);
+app.use('/api/preorders', preorderRoutes);
 
 app.post('/api/sync', async (req, res) => {
   try {

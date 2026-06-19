@@ -303,4 +303,34 @@ router.delete('/:codigo/imagen', tryAuthenticate, authorize('superadmin', 'admin
   }
 });
 
+router.get('/:codigo', tryAuthenticate, async (req, res, next) => {
+  try {
+    const { codigo } = req.params;
+    const offer = await Offer.findOne({ codigoArticulo: codigo, ofertaActiva: true }).lean();
+
+    if (!offer) {
+      return res.status(404).json({ message: 'Oferta no encontrada' });
+    }
+
+    // Price filtering matching the list endpoint
+    const result = { ...offer };
+    const user = req.user;
+
+    if (!user) {
+      delete result.precio2;
+      delete result.precio3;
+    } else if (user.roles?.includes('client')) {
+      if (user.priceTier === 2) {
+        delete result.precio3;
+      } else if (user.priceTier === 3) {
+        delete result.precio2;
+      }
+    }
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

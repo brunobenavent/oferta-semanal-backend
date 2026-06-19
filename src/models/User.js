@@ -27,7 +27,8 @@ const userSchema = new mongoose.Schema({
   verificationExpires: { type: Date, default: null, index: { expireAfterSeconds: 0 } },
   resetToken: { type: String, default: null, select: false },
   resetExpires: { type: Date, default: null },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  assignedCommercials: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 // Hash password on save
