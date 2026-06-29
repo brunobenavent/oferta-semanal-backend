@@ -336,7 +336,7 @@ router.get('/users', authenticate, authorize('superadmin', 'admin'), async (req,
 // POST /users
 router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req, res, next) => {
   try {
-    const { email, nombre, role: bodyRole, roles, priceTier, clientName, phone, position, languages, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail, assignedCommercials } = req.body;
+    const { email, nombre, role: bodyRole, roles, priceTier, clientName, phone, position, languages, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail, assignedCommercials, showInContact } = req.body;
 
     if (!email || !nombre) {
       return res.status(400).json({ message: 'Email y nombre son requeridos' });
@@ -373,6 +373,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
       authorizedPosition: authorizedPosition || '',
       authorizedEmail: authorizedEmail || '',
       assignedCommercials: assignedCommercials || [],
+      showInContact: showInContact ?? true,
       isVerified: finalRoles.includes('commercial'), // commercials start verified
       createdBy: req.user.userId,
     });
@@ -404,7 +405,7 @@ router.post('/users', authenticate, authorize('superadmin', 'admin'), async (req
 router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { role: bodyRole, roles, priceTier, clientName, isActive, nombre, phone, position, languages, photo, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail, assignedCommercials } = req.body;
+    const { role: bodyRole, roles, priceTier, clientName, isActive, nombre, phone, position, languages, photo, cif, taxAddress, authorizedName, authorizedPosition, authorizedEmail, assignedCommercials, showInContact } = req.body;
 
     // Load the current user first
     const currentUser = await User.findById(id);
@@ -439,6 +440,7 @@ router.put('/users/:id', authenticate, authorize('superadmin', 'admin'), async (
     if (authorizedPosition !== undefined) updateData.authorizedPosition = authorizedPosition;
     if (authorizedEmail !== undefined) updateData.authorizedEmail = authorizedEmail;
     if (assignedCommercials !== undefined) updateData.assignedCommercials = assignedCommercials;
+    if (showInContact !== undefined) updateData.showInContact = showInContact;
 
     const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 

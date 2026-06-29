@@ -23,6 +23,7 @@ const userSchema = new mongoose.Schema({
   displayOrder: { type: Number, default: 0 },
   isVerified: { type: Boolean, default: false, index: true },
   isActive: { type: Boolean, default: true, index: true },
+  showInContact: { type: Boolean, default: true },
   verificationToken: { type: String, default: null, select: false },
   verificationExpires: { type: Date, default: null, index: { expireAfterSeconds: 0 } },
   resetToken: { type: String, default: null, select: false },

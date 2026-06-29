@@ -58,7 +58,7 @@ const upload = multer({
 // GET /api/commercials — list active commercials (role=commercial, isActive=true), sorted by displayOrder
 router.get('/', tryAuthenticate, async (req, res, next) => {
   try {
-    const users = await User.find({ roles: 'commercial', isActive: true })
+    const users = await User.find({ roles: 'commercial', isActive: true, showInContact: true })
       .sort({ displayOrder: 1 })
       .lean();
     res.json({ commercials: users.map(toCommercialJSON) });
@@ -115,6 +115,7 @@ router.put('/:id', authenticate, authorize('superadmin', 'admin'), async (req, r
     if (req.body.languages !== undefined) updateData.languages = req.body.languages;
     if (req.body.order !== undefined) updateData.displayOrder = req.body.order;
     if (req.body.active !== undefined) updateData.isActive = req.body.active;
+    if (req.body.showInContact !== undefined) updateData.showInContact = req.body.showInContact;
 
     const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 
