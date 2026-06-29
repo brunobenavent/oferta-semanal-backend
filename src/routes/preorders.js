@@ -237,7 +237,7 @@ router.patch('/:id/items', authenticate, loadPreorder, async (req, res, next) =>
 // ── PATCH /:id/estado — Change estado with transition guard ──
 router.patch('/:id/estado', authenticate, loadPreorder, async (req, res, next) => {
   try {
-    const { estado: nuevoEstado } = req.body;
+    const { estado: nuevoEstado, comerciales } = req.body;
     if (!nuevoEstado) {
       return res.status(400).json({ message: 'El campo estado es requerido' });
     }
@@ -342,6 +342,11 @@ router.patch('/:id/estado', authenticate, loadPreorder, async (req, res, next) =
     }
 
     req.preorder.estado = nuevoEstado;
+
+    if (comerciales && Array.isArray(comerciales) && comerciales.length > 0) {
+      req.preorder.comerciales = comerciales;
+    }
+
     await req.preorder.save();
 
     const populated = await PreOrder.findById(req.preorder._id)

@@ -288,7 +288,7 @@ router.post('/reset-password/:token', async (req, res, next) => {
 // GET /me
 router.get('/me', authenticate, async (req, res, next) => {
   try {
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.user.userId).populate('assignedCommercials', 'nombre email role');
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
@@ -300,6 +300,7 @@ router.get('/me', authenticate, async (req, res, next) => {
         roles: user.roles,
         priceTier: user.priceTier,
         clientName: user.clientName,
+        assignedCommercials: user.assignedCommercials || [],
         isVerified: user.isVerified,
         isActive: user.isActive,
         photo: user.photo || null,
